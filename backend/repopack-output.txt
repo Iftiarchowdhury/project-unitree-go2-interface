@@ -1,0 +1,294 @@
+my python flash app:
+    ================================================================
+    File Summary
+    ================================================================
+
+
+
+    File Format:
+    ------------
+    The content is organized as follows:
+    1. This summary section
+    2. Repository information
+    3. Repository structure
+    4. Multiple file entries, each consisting of:
+      a. A separator line (================)
+      b. The file path (File: path/to/file)
+      c. Another separator line
+      d. The full contents of the file
+      e. A blank line
+
+
+
+    ================================================================
+    Repository Structure
+    ================================================================
+    app/__init__.py
+    app/api/routes.py
+    app/domain/entities/robot.py
+    app/domain/interfaces/robot_repository.py
+    app/infrastructure/repositories/robot_repository.py
+    app/usecases/robot_service.py
+    requirements.txt
+    run.py
+
+    ================================================================
+    Repository Files
+    ================================================================
+
+    ================
+    File: app/__init__.py
+    ================
+    from flask import Flask
+    from flask_cors import CORS
+
+
+    def create_app():
+        app = Flask(__name__)
+
+        # Configure CORS properly
+        CORS(app, resources={
+            r"/api/*": {
+                "origins": ["http://localhost:5173"],
+                "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+                "allow_headers": ["Content-Type", "Authorization", "Content-Length", "X-Requested-With"],
+                "expose_headers": ["Content-Range", "X-Content-Range"],
+                "supports_credentials": True
+            }
+        })
+
+        # Import and register blueprints
+        from app.api.routes import api_bp
+        app.register_blueprint(api_bp, url_prefix='/api')
+
+        return app
+
+    ================
+    File: app/api/routes.py
+    ================
+    from flask import Blueprint, jsonify, request, make_response
+    from flask_cors import cross_origin
+    from app.infrastructure.repositories.robot_repository import RobotRepository
+    from app.usecases.robot_service import RobotService
+
+    api_bp = Blueprint('api', __name__)
+    robot_repository = RobotRepository()
+    robot_service = RobotService(robot_repository)
+
+
+    @api_bp.route('/robot/connect', methods=['POST', 'OPTIONS'])
+    @cross_origin()
+    def connect():
+        if request.method == 'OPTIONS':
+            response = make_response()
+            response.headers.add('Access-Control-Allow-Methods', 'POST')
+            response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
+            return response
+
+        data = request.get_json()
+        ip_address = data.get('ipAddress')
+
+        if not ip_address:
+            return jsonify({'error': 'IP address is required'}), 400
+
+        try:
+            robot_service.connect(ip_address)
+            return jsonify({'message': 'Connected successfully'}), 200
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @api_bp.route('/robot/terminate', methods=['POST'])
+    def terminate():
+        try:
+            robot_service.disconnect()
+            return jsonify({'message': 'Session terminated successfully'}), 200
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @api_bp.route('/robot/command', methods=['POST'])
+    def send_command():
+        data = request.get_json()
+        command = data.get('command')
+
+        if not command:
+            return jsonify({'error': 'Command is required'}), 400
+
+        try:
+            robot_service.send_command(command)
+            return jsonify({'message': f'Command {command} sent successfully'}), 200
+        except ConnectionError as e:
+            return jsonify({'error': str(e)}), 400
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @api_bp.route('/robot/status', methods=['GET'])
+    def get_status():
+        try:
+            state = robot_service.get_state()
+            return jsonify({
+                'battery': state.battery,
+                'temperature': state.temperature,
+                'humidity': state.humidity,
+                'cpuUsage': state.cpu_usage,
+                'powerConsumption': state.power_consumption,
+                'speed': state.speed,
+                'mode': state.mode,
+                'uptime': state.uptime,
+                'errors': state.errors
+            }), 200
+        except ConnectionError as e:
+            return jsonify({'error': str(e)}), 400
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    ================
+    File: app/domain/entities/robot.py
+    ================
+    from dataclasses import dataclass
+    from typing import Optional
+
+    @dataclass
+    class RobotState:
+        battery: float
+        temperature: float
+        humidity: float
+        cpu_usage: float
+        power_consumption: float
+        speed: float
+        mode: str
+        uptime: int
+        errors: int
+
+    @dataclass
+    class RobotCommand:
+        command: str
+        parameters: Optional[dict] = None
+
+    ================
+    File: app/domain/interfaces/robot_repository.py
+    ================
+    from abc import ABC, abstractmethod
+    from app.domain.entities.robot import RobotState, RobotCommand
+
+    class RobotRepositoryInterface(ABC):
+        @abstractmethod
+        def connect(self, ip_address: str) -> bool:
+            pass
+
+        @abstractmethod
+        def disconnect(self) -> bool:
+            pass
+
+        @abstractmethod
+        def send_command(self, command: RobotCommand) -> bool:
+            pass
+
+        @abstractmethod
+        def get_state(self) -> RobotState:
+            pass
+
+    ================
+    File: app/infrastructure/repositories/robot_repository.py
+    ================
+    from app.domain.interfaces.robot_repository import RobotRepositoryInterface
+    from app.domain.entities.robot import RobotState, RobotCommand
+    import random
+
+    class RobotRepository(RobotRepositoryInterface):
+        def __init__(self):
+            self.connected = False
+            self.ip_address = None
+
+        def connect(self, ip_address: str) -> bool:
+            # Simulate connection
+            print(f"Connecting to robot at {ip_address}")
+            self.connected = True
+            self.ip_address = ip_address
+            return True
+
+        def disconnect(self) -> bool:
+            # Simulate disconnection
+            print(f"Disconnecting from robot at {self.ip_address}")
+            self.connected = False
+            self.ip_address = None
+            return True
+
+        def send_command(self, command: RobotCommand) -> bool:
+            if not self.connected:
+                raise ConnectionError("Not connected to robot")
+            # Simulate sending command
+            print(f"Sending command {command.command} to robot")
+            return True
+
+        def get_state(self) -> RobotState:
+            if not self.connected:
+                raise ConnectionError("Not connected to robot")
+            # Simulate getting robot state with random values
+            return RobotState(
+                battery=random.uniform(20, 100),
+                temperature=random.uniform(20, 80),
+                humidity=random.uniform(30, 70),
+                cpu_usage=random.uniform(10, 90),
+                power_consumption=random.uniform(100, 500),
+                speed=random.uniform(0, 5),
+                mode=random.choice(['Manual', 'Autonomous', 'Hybrid']),
+                uptime=random.randint(0, 86400),
+                errors=random.randint(0, 5)
+            )
+
+    ================
+    File: app/usecases/robot_service.py
+    ================
+    from app.domain.interfaces.robot_repository import RobotRepositoryInterface
+    from app.domain.entities.robot import RobotCommand, RobotState
+
+    class RobotService:
+        def __init__(self, repository: RobotRepositoryInterface):
+            self.repository = repository
+
+        def connect(self, ip_address: str) -> bool:
+            return self.repository.connect(ip_address)
+
+        def disconnect(self) -> bool:
+            return self.repository.disconnect()
+
+        def send_command(self, command: str, parameters: dict = None) -> bool:
+            cmd = RobotCommand(command=command, parameters=parameters)
+            return self.repository.send_command(cmd)
+
+        def get_state(self) -> RobotState:
+            return self.repository.get_state()
+
+    ================
+    File: requirements.txt
+    ================
+    flask==2.3.3
+    flask-cors==4.0.0
+    python-dotenv==1.0.0
+
+    ================
+    File: run.py
+    ================
+    from flask import Flask
+    from app.api.routes import api_bp
+    from flask_cors import CORS
+
+    # Remove duplicate app creation
+    app = Flask(__name__)
+
+    # Configure CORS properly
+    CORS(app, resources={
+        r"/api/*": {
+            "origins": ["http://localhost:5173"],
+            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization", "Content-Length", "X-Requested-With"],
+            "expose_headers": ["Content-Range", "X-Content-Range"],
+            "supports_credentials": True
+        }
+    })
+
+    # Register blueprint
+    app.register_blueprint(api_bp, url_prefix='/api')
+
+    if __name__ == '__main__':
+        app.run(debug=True, host='0.0.0.0', port=5000)
