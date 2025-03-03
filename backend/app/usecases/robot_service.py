@@ -16,4 +16,8 @@ class RobotService:
         return self.repository.send_command(cmd)
     
     def get_state(self) -> RobotState:
-        return self.repository.get_state() 
+        return self.repository.get_state()
+    
+    def get_video_frame(self) -> str:
+        """Get the latest video frame as a base64-encoded JPEG image"""
+        return self.repository.get_video_frame()

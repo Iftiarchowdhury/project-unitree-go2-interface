@@ -107,6 +107,27 @@ def get_status():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@api_bp.route('/robot/video', methods=['GET', 'OPTIONS'])
+@cross_origin(**cors_config)
+def get_video():
+    if request.method == 'OPTIONS':
+        response = make_response()
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        response.headers.add('Access-Control-Allow-Methods', 'GET')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
+        return response
+
+    try:
+        frame = robot_service.get_video_frame()
+        if frame:
+            return jsonify({'frame': frame}), 200
+        else:
+            return jsonify({'error': 'No video frame available'}), 404
+    except ConnectionError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @api_bp.route('/robot/logs', methods=['POST', 'OPTIONS'])
 @cross_origin(**cors_config)
 def log_operation():
