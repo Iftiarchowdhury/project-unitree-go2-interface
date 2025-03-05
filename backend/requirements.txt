@@ -3,4 +3,5 @@ flask-cors==4.0.0
 python-dotenv==1.0.0
 opencv-python==4.8.1.78
 numpy==1.26.0
-go2-webrtc-connect==1.0.0
+aiortc==1.5.0
+go2-webrtc-driver==1.0.0

@@ -3,11 +3,13 @@ from app.domain.entities.robot import RobotState, RobotCommand
 from app.services.robot_connection import robot_connection
 import cv2
 import base64
+import time
 
 class RobotRepository(RobotRepositoryInterface):
     def __init__(self):
         self.connected = False
         self.ip_address = None
+        self.connection_time = None
     
     def connect(self, ip_address: str) -> bool:
         # Connect to the robot using the RobotConnection service
@@ -16,6 +18,7 @@ class RobotRepository(RobotRepositoryInterface):
             robot_connection.connect(ip_address)
             self.connected = True
             self.ip_address = ip_address
+            self.connection_time = time.time()
             return True
         except Exception as e:
             print(f"Error connecting to robot: {e}")
@@ -28,6 +31,7 @@ class RobotRepository(RobotRepositoryInterface):
             robot_connection.disconnect()
             self.connected = False
             self.ip_address = None
+            self.connection_time = None
             return True
         except Exception as e:
             print(f"Error disconnecting from robot: {e}")
@@ -67,23 +71,25 @@ class RobotRepository(RobotRepositoryInterface):
             )
         
         # Extract data from sensor_data
-        # The format matches what we've seen in the examples
         imu_state = sensor_data.get('imu_state', {}).get('rpy', [0, 0, 0])
         bms_state = sensor_data.get('bms_state', {})
         temperature_ntc1 = sensor_data.get('temperature_ntc1', 0)
         power_v = sensor_data.get('power_v', 0)
         
+        # Calculate uptime since connection
+        uptime = int(time.time() - self.connection_time) if self.connection_time else 0
+        
         # Map the sensor data to our RobotState structure
         return RobotState(
             battery=bms_state.get('soc', 0),
             temperature=temperature_ntc1,
-            humidity=50,  # Not directly available in sensor data
-            cpu_usage=30,  # Not directly available in sensor data
+            humidity=50,  # Not directly available in sensor data, using default
+            cpu_usage=30,  # Not directly available in sensor data, using default
             power_consumption=bms_state.get('current', 0) * power_v / 1000,  # Current * Voltage = Power
             speed=float(abs(imu_state[2])) / 10,  # Use yaw rotation as approximate speed indicator
             mode="Manual",  # Default mode
-            uptime=100,  # Not directly available in sensor data
-            errors=0   # Not directly available in sensor data
+            uptime=uptime,  # Time since connected
+            errors=0   # Not directly available in sensor data, using default
         )
     
     def get_video_frame(self):
@@ -94,10 +100,14 @@ class RobotRepository(RobotRepositoryInterface):
         frame = robot_connection.get_latest_video_frame()
         
         if frame is not None:
-            # Encode frame as JPEG
-            _, buffer = cv2.imencode('.jpg', frame)
-            # Convert to base64
-            jpg_as_text = base64.b64encode(buffer).decode('utf-8')
-            return jpg_as_text
+            try:
+                # Encode frame as JPEG
+                _, buffer = cv2.imencode('.jpg', frame)
+                # Convert to base64
+                jpg_as_text = base64.b64encode(buffer).decode('utf-8')
+                return jpg_as_text
+            except Exception as e:
+                print(f"Error encoding video frame: {e}")
+                return None
         
         return None
